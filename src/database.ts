@@ -11,12 +11,21 @@ export function initDatabase() {
     CREATE TABLE IF NOT EXISTS leads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       phone TEXT UNIQUE NOT NULL,
+      push_name TEXT,
       first_message TEXT,
       first_detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       status TEXT DEFAULT 'new'
     );
   `);
+  
+  // Add push_name column to existing database if it doesn't exist
+  try {
+    db.run(`ALTER TABLE leads ADD COLUMN push_name TEXT;`);
+    console.log("Added push_name column to leads table.");
+  } catch (err: any) {
+    // Ignore error if column already exists
+  }
   
   console.log("Database initialized successfully.");
 }
@@ -34,13 +43,14 @@ export function isExistingLead(phone: string): boolean {
   return false;
 }
 
-export function saveLead(phone: string, firstMessage: string): void {
+export function saveLead(phone: string, firstMessage: string, pushName: string = ''): void {
   const insert = db.query(`
-    INSERT INTO leads (phone, first_message)
-    VALUES ($phone, $firstMessage)
+    INSERT INTO leads (phone, first_message, push_name)
+    VALUES ($phone, $firstMessage, $pushName)
   `);
   insert.run({
     $phone: phone,
     $firstMessage: firstMessage,
+    $pushName: pushName,
   });
 }

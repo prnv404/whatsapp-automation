@@ -3,4 +3,7 @@ export const config = {
   waSessionPath: process.env.WHATSAPP_SESSION_PATH || 'auth_info_baileys',
   dbPath: 'leads.db',
   serverPort: process.env.PORT ? parseInt(process.env.PORT) : 3000,
+  frappeUrl: process.env.FRAPPE_URL || '',
+  frappeApiKey: process.env.FRAPPE_API_KEY || '',
+  frappeApiSecret: process.env.FRAPPE_API_SECRET || '',
 };

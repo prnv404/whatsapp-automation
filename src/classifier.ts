@@ -12,7 +12,9 @@ export function initClassifier() {
 }
 
 export async function classifyMessage(message: string): Promise<ClassificationResult> {
+  console.log(`[DEBUG] classifyMessage called with message: "${message}"`);
   if (!config.geminiApiKey) {
+    console.log(`[DEBUG] classifyMessage: No API key, returning 'NO'`);
     return 'NO';
   }
 
@@ -40,24 +42,27 @@ export async function classifyMessage(message: string): Promise<ClassificationRe
       ${message}`;
 
   try {
+    console.log(`[DEBUG] Sending request to Gemini with prompt length: ${prompt.length}`);
     const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite',
         contents: prompt,
         config: {
             temperature: 0.0,
-            maxOutputTokens: 5,
+            maxOutputTokens: 50,
         }
     }); 
 
-    const result = response.text?.trim().toUpperCase();
+    const result = response.text?.trim().toUpperCase() || '';
+    console.log(`[DEBUG] Gemini raw response: "${response.text}"`);
+    console.log(`[DEBUG] Gemini parsed result: "${result}"`);
     
-    if (result === 'LEAD') {
+    if (result.includes('LEAD')) {
       return 'LEAD';
     }
     
     return 'NO';
   } catch (error) {
-    console.error("Gemini API error:", error);
+    console.error("[DEBUG] Gemini API error:", error);
     return 'NO';
   }
 }
