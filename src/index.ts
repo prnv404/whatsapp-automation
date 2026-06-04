@@ -36,7 +36,7 @@ async function handleMessageUpsert(m: any) {
     return;
   }
 
-  // 6. If the number does not exist: Send message text to OpenAI
+  // 6. If the number does not exist: Send message text to Gemini
   console.log(`[${phone}] New user detected. Analyzing message for lead intent...`);
   const result = await classifyMessage(messageText);
 
