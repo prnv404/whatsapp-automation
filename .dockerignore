@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+Dockerfile
+.dockerignore
+.git
+.gitignore
+auth_info_baileys
+leads.db
+README.md
