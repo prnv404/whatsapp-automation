@@ -1,12 +1,10 @@
 import { initDatabase, isExistingLead, saveLead } from './database';
 import { initClassifier, classifyMessage } from './classifier';
-import { initializeWhatsApp, getMessageText } from './whatsapp';
+import { initializeWhatsApp, getMessageText, sendWhatsAppMessage } from './whatsapp';
 import { config } from './config';
 import { FrappeClient } from './services/frappe.service';
 
 const frappeClient = new FrappeClient();
-
-let sock: any = null;
 
 async function handleMessageUpsert(m: any) {
   console.log(`[DEBUG] Received message upsert event. Type: ${m.type}`);
@@ -130,14 +128,12 @@ async function handleMessageUpsert(m: any) {
     console.log('----------------------------------------------------\n');
 
     // Send notification to the specific WhatsApp group
-    if (sock) {
-      try {
-        const groupMsg = `🚨 *NEW HOUSEBOAT LEAD DETECTED* 🚨\n\n*Name:* ${pushName}\n*Phone:* ${phone}\n*Message:* "${messageText}"${frappeLeadId ? `\n*CRM Lead ID:* ${frappeLeadId}` : ''}`;
-        await sock.sendMessage('120363427759437268@g.us', { text: groupMsg });
-        console.log(`[DEBUG] Sent lead notification to WhatsApp group.`);
-      } catch (err) {
-        console.error(`[DEBUG] Failed to send message to group:`, err);
-      }
+    try {
+      const groupMsg = `🚨 *NEW HOUSEBOAT LEAD DETECTED* 🚨\n\n*Name:* ${pushName}\n*Phone:* ${phone}\n*Message:* "${messageText}"${frappeLeadId ? `\n*CRM Lead ID:* ${frappeLeadId}` : ''}`;
+      await sendWhatsAppMessage('120363427759437268@g.us', { text: groupMsg });
+      console.log(`[DEBUG] Sent lead notification to WhatsApp group.`);
+    } catch (err) {
+      console.error(`[DEBUG] Failed to send message to group:`, err);
     }
   } else {
     // 8. If result = NO -> Ignore
@@ -150,7 +146,7 @@ async function start() {
   
   initDatabase();
   initClassifier();
-  sock = await initializeWhatsApp(handleMessageUpsert);
+  await initializeWhatsApp(handleMessageUpsert);
 
   // Run the Bun HTTP Server to keep process alive and provide status
   Bun.serve({

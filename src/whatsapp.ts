@@ -4,6 +4,8 @@ import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { config } from './config';
 
+let currentSock: any = null;
+
 export async function initializeWhatsApp(onMessageUpsert: (m: any) => Promise<void>) {
   const { state, saveCreds } = await useMultiFileAuthState(config.waSessionPath);
 
@@ -12,6 +14,8 @@ export async function initializeWhatsApp(onMessageUpsert: (m: any) => Promise<vo
     logger: pino({ level: 'silent' }) as any,
     browser: Browsers.macOS('Desktop'),
   });
+
+  currentSock = sock;
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -48,4 +52,11 @@ export function getMessageText(message: proto.IMessage | null | undefined): stri
          message.imageMessage?.caption || 
          message.videoMessage?.caption || 
          undefined;
+}
+
+export async function sendWhatsAppMessage(jid: string, content: any) {
+  if (!currentSock) {
+    throw new Error('WhatsApp socket not initialized');
+  }
+  return currentSock.sendMessage(jid, content);
 }
