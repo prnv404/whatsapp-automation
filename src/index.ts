@@ -1,10 +1,7 @@
 import { initDatabase, isExistingLead, saveLead } from './database';
 import { initClassifier, classifyMessage } from './classifier';
-import { initializeWhatsApp, getMessageText, sendWhatsAppMessage } from './whatsapp';
+import { initializeWhatsApp, getMessageText } from './whatsapp';
 import { config } from './config';
-import { FrappeClient } from './services/frappe.service';
-
-const frappeClient = new FrappeClient();
 
 async function handleMessageUpsert(m: any) {
   console.log(`[DEBUG] Received message upsert event. Type: ${m.type}`);
@@ -79,70 +76,79 @@ async function handleMessageUpsert(m: any) {
   const exists = isExistingLead(phone);
   console.log(`[DEBUG] Lead exists in DB: ${exists}`);
 
+  let classificationResult = 'EXISTING_LEAD';
+
   if (exists) {
     // 5. If the number already exists: Update last_message_at (done in isExistingLead), do not classify again
     console.log(`[DEBUG] Ignored: ${phone} is an existing lead. Not classifying again.`);
-    
-    // Send subsequent messages as comments to Frappe CRM (DISABLED)
-    // try {
-    //   const response = await frappeClient.createOrGetLead({
-    //     name: pushName,
-    //     phone: phone,
-    //     description: messageText
-    //   });
-    //   console.log(`[Frappe CRM] Existing lead follow-up. Action: ${response.action}, Lead ID: ${response.leadId}`);
-    // } catch (error) {
-    //   console.error(`[Frappe CRM] Failed to update lead:`, error);
-    // }
-    return;
+  } else {
+    // 6. If the number does not exist: Send message text to Gemini
+    console.log(`[${phone}] New user detected. Analyzing message for lead intent...`);
+    classificationResult = await classifyMessage(messageText);
+    console.log(`[DEBUG] Classification result for ${phone}: ${classificationResult}`);
+
+    if (classificationResult === 'LEAD') {
+      // 7. If result = LEAD
+      saveLead(phone, messageText, pushName);
+
+      console.log('\n----------------------------------------------------');
+      console.log('🚨 NEW LEAD DETECTED 🚨');
+      console.log(`Phone: ${phone}`);
+      console.log(`Name:  ${pushName}`);
+      console.log(`Message: "${messageText}"`);
+      console.log('----------------------------------------------------\n');
+
+      // Send webhook for new lead
+      try {
+        console.log(`[DEBUG] Sending webhook for new lead`);
+        await fetch('https://console-seven-chi.vercel.app/api/webhooks/leads', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: pushName || "Unknown",
+            whatsappNumber: phone.startsWith('+') ? phone : '+' + phone,
+            status: "New",
+            lastMessage: messageText,
+            source: "WhatsApp"
+          })
+        });
+        console.log(`[DEBUG] Sent lead notification to webhook.`);
+      } catch (err) {
+        console.error(`[DEBUG] Failed to send webhook:`, err);
+      }
+
+    } else {
+      // 8. If result = NO -> Ignore
+      console.log(`[${phone}] Not a lead. Ignored.`);
+    }
   }
 
-  // 6. If the number does not exist: Send message text to Gemini
-  console.log(`[${phone}] New user detected. Analyzing message for lead intent...`);
-  const result = await classifyMessage(messageText);
-  console.log(`[DEBUG] Classification result for ${phone}: ${result}`);
-
-  if (result === 'LEAD') {
-    // 7. If result = LEAD
-    saveLead(phone, messageText, pushName);
-    
-    let frappeLeadId = '';
-    // Create lead in Frappe CRM (DISABLED)
-    // try {
-    //   const response = await frappeClient.createOrGetLead({
-    //     name: pushName,
-    //     phone: phone,
-    //     description: messageText
-    //   });
-    //   frappeLeadId = response.leadId;
-    //   console.log(`[Frappe CRM] Processed new lead. Action: ${response.action}, Lead ID: ${frappeLeadId}`);
-    // } catch (error) {
-    //   console.error(`[Frappe CRM] Failed to create lead:`, error);
-    // }
-
-    console.log('\n----------------------------------------------------');
-    console.log('🚨 NEW HOUSEBOAT LEAD DETECTED 🚨');
-    console.log(`Phone: ${phone}`);
-    console.log(`Name:  ${pushName}`);
-    console.log(`Message: "${messageText}"`);
-    console.log('----------------------------------------------------\n');
-
-    // Send notification to the specific WhatsApp group
-    try {
-      const groupMsg = `🚨 *NEW HOUSEBOAT LEAD DETECTED* 🚨\n\n*Name:* ${pushName}\n*Phone:* ${phone}\n*Message:* "${messageText}"${frappeLeadId ? `\n*CRM Lead ID:* ${frappeLeadId}` : ''}`;
-      await sendWhatsAppMessage('120363427759437268@g.us', { text: groupMsg });
-      console.log(`[DEBUG] Sent lead notification to WhatsApp group.`);
-    } catch (err) {
-      console.error(`[DEBUG] Failed to send message to group:`, err);
-    }
-  } else {
-    // 8. If result = NO -> Ignore
-    console.log(`[${phone}] Not a lead. Ignored.`);
+  // Send the intercepted message to the Custom Dashboard Webapp API
+  try {
+    console.log(`[DEBUG] Sending message to Custom Dashboard API at ${config.dashboardApiUrl}`);
+    const apiResponse = await fetch(config.dashboardApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        phone: phone,
+        name: pushName,
+        message: messageText,
+        classification: classificationResult,
+        timestamp: new Date().toISOString()
+      })
+    });
+    console.log(`[DEBUG] Dashboard API response status: ${apiResponse.status}`);
+  } catch (error) {
+    console.error(`[DEBUG] Failed to send message to Dashboard API:`, error);
   }
 }
 
 async function start() {
-  console.log("Starting Houseboat Lead Detection System...");
+  console.log("Starting Lead Detection System...");
   
   initDatabase();
   initClassifier();
@@ -155,13 +161,30 @@ async function start() {
       const url = new URL(req.url);
 
       if (url.pathname === "/") {
-        return new Response("Houseboat Lead Detection System is running.\n");
+        return new Response("Lead Detection System is running.\n");
       }
 
       if (url.pathname === "/status") {
         return new Response(JSON.stringify({ status: "running" }), {
           headers: { "Content-Type": "application/json" },
         });
+      }
+
+      if (url.pathname === "/api/demo-insert" && req.method === "POST") {
+        try {
+          const body = await req.json();
+          console.log('\n================ DEMO API RECEIVED DATA ================');
+          console.log(JSON.stringify(body, null, 2));
+          console.log('========================================================\n');
+          return new Response(JSON.stringify({ success: true, message: "Data received by demo API" }), {
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
       }
 
       return new Response("Not found", { status: 404 });

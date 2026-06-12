@@ -26,17 +26,7 @@ export async function classifyMessage(message: string): Promise<ClassificationRe
     or
     NO
 
-    A LEAD is someone asking about:
-
-    * Houseboat booking
-    * Houseboat availability
-    * Rates
-    * Packages
-    * Alleppey cruise
-    * Backwater cruise
-    * Stay options
-    * Tourism enquiries
-    * Reservation requests
+    A LEAD is someone showing interest in a product or service, asking for pricing, availability, making a booking, or any general business enquiry.
 
       Message:
       ${message}`;
