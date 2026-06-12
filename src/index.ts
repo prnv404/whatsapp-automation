@@ -101,7 +101,7 @@ async function handleMessageUpsert(m: any) {
       // Send webhook for new lead
       try {
         console.log(`[DEBUG] Sending webhook for new lead`);
-        await fetch('https://console-seven-chi.vercel.app/api/webhooks/leads', {
+        await fetch(config.dashboardApiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -125,26 +125,7 @@ async function handleMessageUpsert(m: any) {
     }
   }
 
-  // Send the intercepted message to the Custom Dashboard Webapp API
-  try {
-    console.log(`[DEBUG] Sending message to Custom Dashboard API at ${config.dashboardApiUrl}`);
-    const apiResponse = await fetch(config.dashboardApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        phone: phone,
-        name: pushName,
-        message: messageText,
-        classification: classificationResult,
-        timestamp: new Date().toISOString()
-      })
-    });
-    console.log(`[DEBUG] Dashboard API response status: ${apiResponse.status}`);
-  } catch (error) {
-    console.error(`[DEBUG] Failed to send message to Dashboard API:`, error);
-  }
+
 }
 
 async function start() {
